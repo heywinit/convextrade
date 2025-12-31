@@ -7,6 +7,7 @@ export default defineSchema({
     passwordHash: v.optional(v.string()),
     balance: v.number(), // USD balance
     cnvxAmount: v.number(), // CNVX token amount
+    isBot: v.optional(v.boolean()),
   })
     .index("by_username", ["username"]),
 

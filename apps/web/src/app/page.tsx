@@ -4,6 +4,7 @@ import { api } from "@convextrade/backend/convex/_generated/api";
 import { useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { AuthForm } from "@/components/auth-form";
+import { BotController } from "@/components/bot-controller";
 import { Chart } from "@/components/chart";
 import { Navbar } from "@/components/navbar";
 import { OrderForm } from "@/components/order-form";
@@ -52,6 +53,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
+      <BotController />
       <Navbar userId={userId} token={token} />
       <main className="mx-auto max-w-[1600px] px-6 py-6">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

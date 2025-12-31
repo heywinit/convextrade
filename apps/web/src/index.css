@@ -2,3 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "./theme.css";
+
+/* Recharts axis text styling */
+.recharts-cartesian-axis-tick text {
+  fill: oklch(var(--muted-foreground));
+}

@@ -35,6 +35,11 @@ export function Orderbook() {
   const aggregatedSells = aggregateOrders(orderbook.sells).reverse(); // Lowest first
   const aggregatedBuys = aggregateOrders(orderbook.buys); // Highest first
 
+  // Calculate total volume for each side to normalize progress bars
+  const totalSellVolume = aggregatedSells.reduce((sum, order) => sum + order.quantity, 0);
+  const totalBuyVolume = aggregatedBuys.reduce((sum, order) => sum + order.quantity, 0);
+  const maxVolume = Math.max(totalSellVolume, totalBuyVolume, 1); // Avoid division by zero
+
   // Show top 10 of each
   const displaySells = aggregatedSells.slice(0, 10);
   const displayBuys = aggregatedBuys.slice(0, 10);
@@ -55,20 +60,31 @@ export function Orderbook() {
 
           {/* Sell orders (asks) */}
           <div className="space-y-0.5">
-            {displaySells.map((order, idx) => (
-              <div
-                key={`sell-${order.price}-${idx}`}
-                className="grid grid-cols-3 gap-2 text-xs hover:bg-muted/50 py-0.5 px-1 rounded"
-              >
-                <div className="text-right text-red-600 dark:text-red-400 font-mono">
-                  ${order.price.toFixed(2)}
+            {displaySells.map((order, idx) => {
+              const volumePercent = (order.quantity / maxVolume) * 100;
+              return (
+                <div
+                  key={`sell-${order.price}-${idx}`}
+                  className="relative grid grid-cols-3 gap-2 text-xs hover:bg-muted/50 py-0.5 px-1 rounded overflow-hidden"
+                >
+                  {/* Progress bar background */}
+                  <div
+                    className="absolute inset-0 bg-red-500/10 dark:bg-red-500/20 transition-all duration-200"
+                    style={{ width: `${volumePercent}%`, right: 0 }}
+                  />
+                  {/* Content */}
+                  <div className="relative text-right text-red-600 dark:text-red-400 font-mono z-10">
+                    ${order.price.toFixed(2)}
+                  </div>
+                  <div className="relative text-right font-mono z-10">
+                    {order.quantity.toFixed(4)}
+                  </div>
+                  <div className="relative text-right font-mono text-muted-foreground z-10">
+                    ${(order.price * order.quantity).toFixed(2)}
+                  </div>
                 </div>
-                <div className="text-right font-mono">{order.quantity.toFixed(4)}</div>
-                <div className="text-right font-mono text-muted-foreground">
-                  ${(order.price * order.quantity).toFixed(2)}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Spread */}
@@ -90,20 +106,31 @@ export function Orderbook() {
 
           {/* Buy orders (bids) */}
           <div className="space-y-0.5">
-            {displayBuys.map((order, idx) => (
-              <div
-                key={`buy-${order.price}-${idx}`}
-                className="grid grid-cols-3 gap-2 text-xs hover:bg-muted/50 py-0.5 px-1 rounded"
-              >
-                <div className="text-right text-green-600 dark:text-green-400 font-mono">
-                  ${order.price.toFixed(2)}
+            {displayBuys.map((order, idx) => {
+              const volumePercent = (order.quantity / maxVolume) * 100;
+              return (
+                <div
+                  key={`buy-${order.price}-${idx}`}
+                  className="relative grid grid-cols-3 gap-2 text-xs hover:bg-muted/50 py-0.5 px-1 rounded overflow-hidden"
+                >
+                  {/* Progress bar background */}
+                  <div
+                    className="absolute inset-0 bg-green-500/10 dark:bg-green-500/20 transition-all duration-200"
+                    style={{ width: `${volumePercent}%`, left: 0 }}
+                  />
+                  {/* Content */}
+                  <div className="relative text-right text-green-600 dark:text-green-400 font-mono z-10">
+                    ${order.price.toFixed(2)}
+                  </div>
+                  <div className="relative text-right font-mono z-10">
+                    {order.quantity.toFixed(4)}
+                  </div>
+                  <div className="relative text-right font-mono text-muted-foreground z-10">
+                    ${(order.price * order.quantity).toFixed(2)}
+                  </div>
                 </div>
-                <div className="text-right font-mono">{order.quantity.toFixed(4)}</div>
-                <div className="text-right font-mono text-muted-foreground">
-                  ${(order.price * order.quantity).toFixed(2)}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </CardContent>

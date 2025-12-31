@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 
@@ -310,6 +310,16 @@ export const placeMarketOrder = mutation({
       // Re-throw to let client handle it, but order is already saved as failed
       throw error;
     }
+  },
+});
+
+// Internal mutation to match orders (used by bots)
+export const matchOrdersInternal = internalMutation({
+  args: {
+    orderId: v.id("orders"),
+  },
+  handler: async (ctx, args) => {
+    await matchOrders(ctx, args.orderId);
   },
 });
 
