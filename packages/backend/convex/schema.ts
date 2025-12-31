@@ -3,9 +3,19 @@ import { v } from "convex/values";
 
 export default defineSchema({
   users: defineTable({
+    username: v.optional(v.string()),
+    passwordHash: v.optional(v.string()),
     balance: v.number(), // USD balance
     cnvxAmount: v.number(), // CNVX token amount
-  }),
+  })
+    .index("by_username", ["username"]),
+
+  sessions: defineTable({
+    userId: v.id("users"),
+    token: v.string(),
+    expiresAt: v.number(),
+  })
+    .index("by_token", ["token"]),
 
   orders: defineTable({
     userId: v.id("users"),
