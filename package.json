@@ -1,0 +1,39 @@
+{
+  "name": "convextrade",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "catalog": {
+      "dotenv": "^17.2.2",
+      "zod": "^4.1.13",
+      "typescript": "^5",
+      "convex": "^1.31.2"
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "check": "biome check --write .",
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:native": "turbo -F native dev",
+    "dev:web": "turbo -F web dev",
+    "dev:server": "turbo -F @convextrade/backend dev",
+    "dev:setup": "turbo -F @convextrade/backend dev:setup"
+  },
+  "dependencies": {
+    "dotenv": "catalog:",
+    "zod": "catalog:",
+    "@convextrade/env": "workspace:*"
+  },
+  "devDependencies": {
+    "turbo": "^2.6.3",
+    "@biomejs/biome": "^2.2.0",
+    "typescript": "catalog:",
+    "@convextrade/config": "workspace:*"
+  },
+  "packageManager": "bun@1.2.23"
+}

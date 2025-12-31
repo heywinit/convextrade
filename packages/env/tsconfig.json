@@ -1,0 +1,3 @@
+{
+  "extends": "@convextrade/config/tsconfig.base.json"
+}
