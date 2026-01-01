@@ -1,13 +1,13 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 
-// Get price history for chart
+// Get price history for chart - optimized
 export const getPriceHistory = query({
   args: {
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const limit = args.limit ?? 100;
+    const limit = Math.min(args.limit ?? 100, 500); // Cap at 500 for performance
     const history = await ctx.db
       .query("priceHistory")
       .withIndex("by_timestamp")
@@ -27,7 +27,7 @@ export const getPriceHistory = query({
       ];
     }
 
-    // Reverse to get chronological order
+    // Reverse to get chronological order (oldest to newest)
     return history.reverse();
   },
 });

@@ -5,7 +5,8 @@ import { api } from "@convextrade/backend/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 export function Orderbook() {
-  const orderbook = useQuery((api as any).orders.getOrderbook);
+  // Use optimized query with limit - server already aggregates and limits
+  const orderbook = useQuery((api as any).orders.getOrderbook, { limit: 20 });
 
   if (!orderbook) {
     return (
@@ -20,27 +21,16 @@ export function Orderbook() {
     );
   }
 
-  // Aggregate orders by price
-  const aggregateOrders = (orders: typeof orderbook.buys) => {
-    const aggregated = new Map<number, number>();
-    orders.forEach((order) => {
-      const remaining = order.quantity - order.filledQuantity;
-      aggregated.set(order.price, (aggregated.get(order.price) ?? 0) + remaining);
-    });
-    return Array.from(aggregated.entries())
-      .map(([price, quantity]) => ({ price, quantity }))
-      .sort((a, b) => b.price - a.price);
-  };
-
-  const aggregatedSells = aggregateOrders(orderbook.sells).reverse(); // Lowest first
-  const aggregatedBuys = aggregateOrders(orderbook.buys); // Highest first
+  // Data is already aggregated and sorted by the server
+  const aggregatedSells = orderbook.sells; // Already sorted lowest first
+  const aggregatedBuys = orderbook.buys; // Already sorted highest first
 
   // Calculate total volume for each side to normalize progress bars
   const totalSellVolume = aggregatedSells.reduce((sum, order) => sum + order.quantity, 0);
   const totalBuyVolume = aggregatedBuys.reduce((sum, order) => sum + order.quantity, 0);
   const maxVolume = Math.max(totalSellVolume, totalBuyVolume, 1); // Avoid division by zero
 
-  // Show top 10 of each
+  // Show top 10 of each (server already limited to 20, but we display 10)
   const displaySells = aggregatedSells.slice(0, 10);
   const displayBuys = aggregatedBuys.slice(0, 10);
 

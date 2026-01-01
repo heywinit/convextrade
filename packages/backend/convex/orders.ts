@@ -2,29 +2,60 @@ import { mutation, query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 
-// Get orderbook (pending buy and sell orders)
+// Get orderbook (pending buy and sell orders) - optimized with pre-aggregation
 export const getOrderbook = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 20; // Default to top 20 of each side
+    
+    // Fetch all pending orders (using index for fast filtering)
     const buyOrders = await ctx.db
       .query("orders")
       .withIndex("by_side_status", (q) => q.eq("side", "buy").eq("status", "pending"))
-      .order("desc")
       .collect();
 
     const sellOrders = await ctx.db
       .query("orders")
       .withIndex("by_side_status", (q) => q.eq("side", "sell").eq("status", "pending"))
-      .order("asc")
       .collect();
 
-    // Sort buy orders by price descending (highest first)
-    const sortedBuys = buyOrders.sort((a, b) => b.price - a.price);
-    // Sort sell orders by price ascending (lowest first)
-    const sortedSells = sellOrders.sort((a, b) => a.price - b.price);
+    // Aggregate orders by price on server (much faster than client-side)
+    const aggregateOrders = (orders: Doc<"orders">[]) => {
+      const aggregated = new Map<number, number>();
+      for (const order of orders) {
+        const remaining = order.quantity - order.filledQuantity;
+        if (remaining > 0) {
+          aggregated.set(order.price, (aggregated.get(order.price) ?? 0) + remaining);
+        }
+      }
+      return Array.from(aggregated.entries())
+        .map(([price, quantity]) => ({ price, quantity }))
+        .sort((a, b) => b.price - a.price) // Highest first for buys
+        .slice(0, limit);
+    };
+
+    // Sort and aggregate buys (highest price first)
+    const aggregatedBuys = aggregateOrders(buyOrders);
+    
+    // Sort and aggregate sells (lowest price first, then reverse for display)
+    const aggregatedSells = sellOrders
+      .reduce((acc, order) => {
+        const remaining = order.quantity - order.filledQuantity;
+        if (remaining > 0) {
+          acc.set(order.price, (acc.get(order.price) ?? 0) + remaining);
+        }
+        return acc;
+      }, new Map<number, number>());
+    
+    const sortedSells = Array.from(aggregatedSells.entries())
+      .map(([price, quantity]) => ({ price, quantity }))
+      .sort((a, b) => a.price - b.price) // Lowest first
+      .slice(0, limit);
 
     return {
-      buys: sortedBuys,
+      buys: aggregatedBuys,
       sells: sortedSells,
     };
   },
