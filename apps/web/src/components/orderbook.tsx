@@ -4,9 +4,9 @@ import { useQuery } from "convex/react";
 import { api } from "@convextrade/backend/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
-export function Orderbook() {
+export function Orderbook({ token }: { token: string }) {
   // Use optimized query with limit - server already aggregates and limits
-  const orderbook = useQuery((api as any).orders.getOrderbook, { limit: 20 });
+  const orderbook = useQuery((api as any).orders.getOrderbook, { token, limit: 20 });
 
   if (!orderbook) {
     return (

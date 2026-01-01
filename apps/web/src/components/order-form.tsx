@@ -9,22 +9,31 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { toast } from "sonner";
 
-export function OrderForm({ userId }: { userId: string | null }) {
+export function OrderForm({ userId, token }: { userId: string | null; token: string }) {
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [orderType, setOrderType] = useState<"limit" | "market">("limit");
   const [price, setPrice] = useState("");
   const [quantity, setQuantity] = useState("");
 
-  const currentPrice = useQuery((api as any).orders.getCurrentPrice);
+  const currentPrice = useQuery((api as any).orders.getCurrentPrice, { token });
   const user = useQuery(
     (api as any).users.getUser,
     userId ? { userId: userId as any } : "skip",
   );
-  const orderbook = useQuery((api as any).orders.getOrderbook);
+  const orderbook = useQuery((api as any).orders.getOrderbook, { token });
   const placeLimitOrder = useMutation((api as any).orders.placeLimitOrder);
   const placeMarketOrder = useMutation((api as any).orders.placeMarketOrder);
 
-  // Calculate required balance/CNVX and check if sufficient
+  // Helper function to get token balance
+  const getTokenBalance = (tokenSymbol: string): number => {
+    if (!user) return 0;
+    if (tokenSymbol === "CNVX") {
+      return user.cnvxAmount ?? (user.tokenBalances as any)?.[tokenSymbol] ?? 0;
+    }
+    return (user.tokenBalances as any)?.[tokenSymbol] ?? 0;
+  };
+
+  // Calculate required balance/tokens and check if sufficient
   const balanceCheck = useMemo(() => {
     if (!user) return { valid: false, error: "Loading user data..." };
     
@@ -69,16 +78,17 @@ export function OrderForm({ userId }: { userId: string | null }) {
       return { valid: true, error: null, required: requiredBalance };
     } else {
       // Sell order
-      if (user.cnvxAmount < quantityNum) {
+      const tokenBalance = getTokenBalance(token);
+      if (tokenBalance < quantityNum) {
         return {
           valid: false,
-          error: `Insufficient CNVX. Required: ${quantityNum.toFixed(4)}, Available: ${user.cnvxAmount.toFixed(4)}`,
+          error: `Insufficient ${token}. Required: ${quantityNum.toFixed(4)}, Available: ${tokenBalance.toFixed(4)}`,
         };
       }
 
       return { valid: true, error: null };
     }
-  }, [user, side, orderType, price, quantity, orderbook, currentPrice]);
+  }, [user, side, orderType, price, quantity, orderbook, currentPrice, token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,21 +121,23 @@ export function OrderForm({ userId }: { userId: string | null }) {
         }
         await placeLimitOrder({
           userId: userId as any,
+          token,
           side,
           price: priceNum,
           quantity: quantityNum,
         });
         toast.success(`${side === "buy" ? "Buy" : "Sell"} limit order placed`, {
-          description: `${quantityNum.toFixed(4)} CNVX at $${priceNum.toFixed(2)}`,
+          description: `${quantityNum.toFixed(4)} ${token} at $${priceNum.toFixed(2)}`,
         });
       } else {
         await placeMarketOrder({
           userId: userId as any,
+          token,
           side,
           quantity: quantityNum,
         });
         toast.success(`${side === "buy" ? "Buy" : "Sell"} market order placed`, {
-          description: `${quantityNum.toFixed(4)} CNVX at market price`,
+          description: `${quantityNum.toFixed(4)} ${token} at market price`,
         });
       }
       setPrice("");
@@ -224,7 +236,7 @@ export function OrderForm({ userId }: { userId: string | null }) {
 
           {/* Quantity input */}
           <div className="space-y-2">
-            <Label htmlFor="quantity">Quantity (CNVX)</Label>
+            <Label htmlFor="quantity">Quantity ({token})</Label>
             <Input
               id="quantity"
               type="number"
@@ -266,8 +278,8 @@ export function OrderForm({ userId }: { userId: string | null }) {
               ) : (
                 <>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Available CNVX:</span>
-                    <span className="font-medium">{user.cnvxAmount.toFixed(4)}</span>
+                    <span className="text-muted-foreground">Available {token}:</span>
+                    <span className="font-medium">{getTokenBalance(token).toFixed(4)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Required:</span>

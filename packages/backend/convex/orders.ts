@@ -5,20 +5,22 @@ import type { Doc } from "./_generated/dataModel";
 // Get orderbook (pending buy and sell orders) - optimized with pre-aggregation
 export const getOrderbook = query({
   args: {
+    token: v.optional(v.string()), // Token symbol, defaults to "CNVX" for backward compatibility
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const token = args.token ?? "CNVX"; // Default to CNVX for backward compatibility
     const limit = args.limit ?? 20; // Default to top 20 of each side
     
-    // Fetch all pending orders (using index for fast filtering)
+    // Fetch all pending orders for the specified token (using index for fast filtering)
     const buyOrders = await ctx.db
       .query("orders")
-      .withIndex("by_side_status", (q) => q.eq("side", "buy").eq("status", "pending"))
+      .withIndex("by_token_side_status", (q) => q.eq("token", token).eq("side", "buy").eq("status", "pending"))
       .collect();
 
     const sellOrders = await ctx.db
       .query("orders")
-      .withIndex("by_side_status", (q) => q.eq("side", "sell").eq("status", "pending"))
+      .withIndex("by_token_side_status", (q) => q.eq("token", token).eq("side", "sell").eq("status", "pending"))
       .collect();
 
     // Aggregate orders by price on server (much faster than client-side)
@@ -63,11 +65,14 @@ export const getOrderbook = query({
 
 // Get current market price (last trade price or default)
 export const getCurrentPrice = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    token: v.optional(v.string()), // Token symbol, defaults to "CNVX" for backward compatibility
+  },
+  handler: async (ctx, args) => {
+    const token = args.token ?? "CNVX"; // Default to CNVX for backward compatibility
     const lastTrade = await ctx.db
       .query("trades")
-      .withIndex("by_timestamp")
+      .withIndex("by_token_timestamp", (q) => q.eq("token", token))
       .order("desc")
       .first();
 
@@ -79,17 +84,20 @@ export const getCurrentPrice = query({
 export const placeLimitOrder = mutation({
   args: {
     userId: v.id("users"),
+    token: v.optional(v.string()), // Token symbol, defaults to "CNVX" for backward compatibility
     side: v.union(v.literal("buy"), v.literal("sell")),
     price: v.number(),
     quantity: v.number(),
   },
   handler: async (ctx, args) => {
     try {
+      const token = args.token ?? "CNVX"; // Default to CNVX for backward compatibility
       const user = await ctx.db.get(args.userId);
       if (!user) {
         const errorMsg = "User not found";
         await ctx.db.insert("orders", {
           userId: args.userId,
+          token,
           type: "limit",
           side: args.side,
           price: args.price,
@@ -107,6 +115,7 @@ export const placeLimitOrder = mutation({
         const errorMsg = "Price and quantity must be positive";
         await ctx.db.insert("orders", {
           userId: args.userId,
+          token,
           type: "limit",
           side: args.side,
           price: args.price,
@@ -119,6 +128,31 @@ export const placeLimitOrder = mutation({
         throw new Error(errorMsg);
       }
 
+      // Helper function to get token balance
+      const getTokenBalance = (tokenSymbol: string): number => {
+        if (tokenSymbol === "CNVX") {
+          // Backward compatibility: use cnvxAmount if tokenBalances doesn't exist
+          return user.cnvxAmount ?? (user.tokenBalances as any)?.[tokenSymbol] ?? 0;
+        }
+        return (user.tokenBalances as any)?.[tokenSymbol] ?? 0;
+      };
+
+      // Helper function to update token balance
+      const updateTokenBalance = async (tokenSymbol: string, amount: number) => {
+        const currentBalances = (user.tokenBalances as any) ?? {};
+        if (tokenSymbol === "CNVX") {
+          // Update both cnvxAmount (backward compat) and tokenBalances
+          await ctx.db.patch(args.userId, {
+            cnvxAmount: amount,
+            tokenBalances: { ...currentBalances, [tokenSymbol]: amount },
+          });
+        } else {
+          await ctx.db.patch(args.userId, {
+            tokenBalances: { ...currentBalances, [tokenSymbol]: amount },
+          });
+        }
+      };
+
       // Check if user has sufficient balance
       if (args.side === "buy") {
         const totalCost = args.price * args.quantity;
@@ -126,6 +160,7 @@ export const placeLimitOrder = mutation({
           const errorMsg = `Insufficient balance. Required: $${totalCost.toFixed(2)}, Available: $${user.balance.toFixed(2)}`;
           await ctx.db.insert("orders", {
             userId: args.userId,
+            token,
             type: "limit",
             side: args.side,
             price: args.price,
@@ -142,11 +177,13 @@ export const placeLimitOrder = mutation({
           balance: user.balance - totalCost,
         });
       } else {
-        // Sell order - check if user has enough CNVX
-        if (user.cnvxAmount < args.quantity) {
-          const errorMsg = `Insufficient CNVX. Required: ${args.quantity.toFixed(4)}, Available: ${user.cnvxAmount.toFixed(4)}`;
+        // Sell order - check if user has enough tokens
+        const tokenBalance = getTokenBalance(token);
+        if (tokenBalance < args.quantity) {
+          const errorMsg = `Insufficient ${token}. Required: ${args.quantity.toFixed(4)}, Available: ${tokenBalance.toFixed(4)}`;
           await ctx.db.insert("orders", {
             userId: args.userId,
+            token,
             type: "limit",
             side: args.side,
             price: args.price,
@@ -158,15 +195,14 @@ export const placeLimitOrder = mutation({
           });
           throw new Error(errorMsg);
         }
-        // Reserve the CNVX
-        await ctx.db.patch(args.userId, {
-          cnvxAmount: user.cnvxAmount - args.quantity,
-        });
+        // Reserve the tokens
+        await updateTokenBalance(token, tokenBalance - args.quantity);
       }
 
       // Create the order
       const orderId = await ctx.db.insert("orders", {
         userId: args.userId,
+        token,
         type: "limit",
         side: args.side,
         price: args.price,
@@ -191,16 +227,19 @@ export const placeLimitOrder = mutation({
 export const placeMarketOrder = mutation({
   args: {
     userId: v.id("users"),
+    token: v.optional(v.string()), // Token symbol, defaults to "CNVX" for backward compatibility
     side: v.union(v.literal("buy"), v.literal("sell")),
     quantity: v.number(),
   },
   handler: async (ctx, args) => {
     try {
+      const token = args.token ?? "CNVX"; // Default to CNVX for backward compatibility
       const user = await ctx.db.get(args.userId);
       if (!user) {
         const errorMsg = "User not found";
         await ctx.db.insert("orders", {
           userId: args.userId,
+          token,
           type: "market",
           side: args.side,
           price: 0,
@@ -217,6 +256,7 @@ export const placeMarketOrder = mutation({
         const errorMsg = "Quantity must be positive";
         await ctx.db.insert("orders", {
           userId: args.userId,
+          token,
           type: "market",
           side: args.side,
           price: 0,
@@ -229,11 +269,11 @@ export const placeMarketOrder = mutation({
         throw new Error(errorMsg);
       }
 
-      // Get current market price estimate from orderbook
+      // Get current market price estimate from orderbook for the specific token
       const orderbook = await ctx.db
         .query("orders")
-        .withIndex("by_side_status", (q: any) =>
-          q.eq("side", args.side === "buy" ? "sell" : "buy").eq("status", "pending"),
+        .withIndex("by_token_side_status", (q: any) =>
+          q.eq("token", token).eq("side", args.side === "buy" ? "sell" : "buy").eq("status", "pending"),
         )
         .collect();
 
@@ -241,6 +281,7 @@ export const placeMarketOrder = mutation({
         const errorMsg = "No matching orders available in the orderbook";
         await ctx.db.insert("orders", {
           userId: args.userId,
+          token,
           type: "market",
           side: args.side,
           price: 0,
@@ -278,6 +319,29 @@ export const placeMarketOrder = mutation({
       // Use worst-case price for reservation
       const worstCasePrice = matchingOrders[0].price;
 
+      // Helper function to get token balance
+      const getTokenBalance = (tokenSymbol: string): number => {
+        if (tokenSymbol === "CNVX") {
+          return user.cnvxAmount ?? (user.tokenBalances as any)?.[tokenSymbol] ?? 0;
+        }
+        return (user.tokenBalances as any)?.[tokenSymbol] ?? 0;
+      };
+
+      // Helper function to update token balance
+      const updateTokenBalance = async (tokenSymbol: string, amount: number) => {
+        const currentBalances = (user.tokenBalances as any) ?? {};
+        if (tokenSymbol === "CNVX") {
+          await ctx.db.patch(args.userId, {
+            cnvxAmount: amount,
+            tokenBalances: { ...currentBalances, [tokenSymbol]: amount },
+          });
+        } else {
+          await ctx.db.patch(args.userId, {
+            tokenBalances: { ...currentBalances, [tokenSymbol]: amount },
+          });
+        }
+      };
+
       // Check if user has sufficient balance
       if (args.side === "buy") {
         const totalCost = worstCasePrice * args.quantity;
@@ -285,6 +349,7 @@ export const placeMarketOrder = mutation({
           const errorMsg = `Insufficient balance. Required: $${totalCost.toFixed(2)}, Available: $${user.balance.toFixed(2)}`;
           await ctx.db.insert("orders", {
             userId: args.userId,
+            token,
             type: "market",
             side: args.side,
             price: worstCasePrice,
@@ -301,10 +366,12 @@ export const placeMarketOrder = mutation({
           balance: user.balance - totalCost,
         });
       } else {
-        if (user.cnvxAmount < args.quantity) {
-          const errorMsg = `Insufficient CNVX. Required: ${args.quantity.toFixed(4)}, Available: ${user.cnvxAmount.toFixed(4)}`;
+        const tokenBalance = getTokenBalance(token);
+        if (tokenBalance < args.quantity) {
+          const errorMsg = `Insufficient ${token}. Required: ${args.quantity.toFixed(4)}, Available: ${tokenBalance.toFixed(4)}`;
           await ctx.db.insert("orders", {
             userId: args.userId,
+            token,
             type: "market",
             side: args.side,
             price: worstCasePrice,
@@ -316,14 +383,13 @@ export const placeMarketOrder = mutation({
           });
           throw new Error(errorMsg);
         }
-        await ctx.db.patch(args.userId, {
-          cnvxAmount: user.cnvxAmount - args.quantity,
-        });
+        await updateTokenBalance(token, tokenBalance - args.quantity);
       }
 
       // Create market order with worst-case price for reservation (actual price determined during matching)
       const orderId = await ctx.db.insert("orders", {
         userId: args.userId,
+        token,
         type: "market",
         side: args.side,
         price: worstCasePrice, // Used for worst-case reservation
@@ -361,11 +427,12 @@ async function matchOrders(ctx: any, newOrderId: string) {
     return;
   }
 
-  // Find matching orders
+  // Find matching orders for the same token
   const oppositeSide = newOrder.side === "buy" ? "sell" : "buy";
   const matchingOrders = await ctx.db
     .query("orders")
-    .withIndex("by_side_status", (q: any) => q.eq("side", oppositeSide).eq("status", "pending"))
+    .withIndex("by_token_side_status", (q: any) => 
+      q.eq("token", newOrder.token).eq("side", oppositeSide).eq("status", "pending"))
     .collect();
 
   // Sort matching orders by price
@@ -411,10 +478,13 @@ async function executeTrade(
   price: number,
   quantity: number,
 ) {
+  const token = order1.token; // Both orders should have the same token
+  
   // Record the trade
   await ctx.db.insert("trades", {
     buyOrderId: order1.side === "buy" ? (order1._id as any) : (order2._id as any),
     sellOrderId: order1.side === "sell" ? (order1._id as any) : (order2._id as any),
+    token,
     price,
     quantity,
     timestamp: Date.now(),
@@ -422,6 +492,7 @@ async function executeTrade(
 
   // Update price history
   await ctx.db.insert("priceHistory", {
+    token,
     price,
     timestamp: Date.now(),
     volume: quantity,
@@ -448,20 +519,44 @@ async function executeTrade(
   const buyerUser = await ctx.db.get(buyer.userId);
   const sellerUser = await ctx.db.get(seller.userId);
 
+  // Helper function to get token balance
+  const getTokenBalance = (user: any, tokenSymbol: string): number => {
+    if (tokenSymbol === "CNVX") {
+      return user.cnvxAmount ?? (user.tokenBalances as any)?.[tokenSymbol] ?? 0;
+    }
+    return (user.tokenBalances as any)?.[tokenSymbol] ?? 0;
+  };
+
+  // Helper function to update token balance
+  const updateTokenBalance = async (userId: any, user: any, tokenSymbol: string, amount: number) => {
+    const currentBalances = (user.tokenBalances as any) ?? {};
+    if (tokenSymbol === "CNVX") {
+      await ctx.db.patch(userId, {
+        cnvxAmount: amount,
+        tokenBalances: { ...currentBalances, [tokenSymbol]: amount },
+      });
+    } else {
+      await ctx.db.patch(userId, {
+        tokenBalances: { ...currentBalances, [tokenSymbol]: amount },
+      });
+    }
+  };
+
   if (buyerUser) {
-    // Buyer gets CNVX, pays USD
+    // Buyer gets tokens, pays USD
     const cost = price * quantity;
     const reservedCost = buyer.price * quantity; // What was originally reserved
     const refund = reservedCost - cost; // Refund difference for limit orders
 
+    const currentTokenBalance = getTokenBalance(buyerUser, token);
+    await updateTokenBalance(buyer.userId, buyerUser, token, currentTokenBalance + quantity);
     await ctx.db.patch(buyer.userId, {
-      cnvxAmount: buyerUser.cnvxAmount + quantity,
       balance: buyerUser.balance + refund, // Refund unused portion
     });
   }
 
   if (sellerUser) {
-    // Seller gets USD, gives CNVX
+    // Seller gets USD, gives tokens
     const revenue = price * quantity;
     await ctx.db.patch(seller.userId, {
       balance: sellerUser.balance + revenue,

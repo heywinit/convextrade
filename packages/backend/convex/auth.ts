@@ -53,12 +53,13 @@ export const register = mutation({
     // Hash password
     const passwordHash = await hashPassword(args.password);
 
-    // Create user with initial $100 and 500 CNVX
+    // Create user with initial $1000 USD and 0 of each token
     const userId = await ctx.db.insert("users", {
       username: args.username,
       passwordHash,
-      balance: 100,
-      cnvxAmount: 500,
+      balance: 1000,
+      cnvxAmount: 0,
+      tokenBalances: { CNVX: 0, BUN: 0, NEXT: 0, SHAD: 0 },
     });
 
     // Create session
@@ -133,12 +134,13 @@ export const loginOrRegister = mutation({
     // User doesn't exist - create new account
     const passwordHash = await hashPassword(args.password);
 
-    // Create user with initial $100 and 500 CNVX
+    // Create user with initial $1000 USD and 0 of each token
     const userId = await ctx.db.insert("users", {
       username: args.username,
       passwordHash,
-      balance: 100,
-      cnvxAmount: 500,
+      balance: 1000,
+      cnvxAmount: 0,
+      tokenBalances: { CNVX: 0, BUN: 0, NEXT: 0, SHAD: 0 },
     });
 
     // Create session
@@ -229,6 +231,7 @@ export const getCurrentUser = query({
       username: user.username,
       balance: user.balance,
       cnvxAmount: user.cnvxAmount,
+      tokenBalances: user.tokenBalances,
     };
   },
 });

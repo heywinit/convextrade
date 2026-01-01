@@ -82,8 +82,9 @@ export function OrderHistory({ userId }: { userId: string | null }) {
       <CardContent>
         <div className="space-y-1">
           {/* Header */}
-          <div className="grid grid-cols-6 gap-2 text-xs text-muted-foreground pb-2 border-b">
+          <div className="grid grid-cols-7 gap-2 text-xs text-muted-foreground pb-2 border-b">
             <div>ID</div>
+            <div>Token</div>
             <div>Type</div>
             <div>Side</div>
             <div>Price</div>
@@ -96,11 +97,12 @@ export function OrderHistory({ userId }: { userId: string | null }) {
             {orderHistory.map((order: any) => (
               <div
                 key={order._id}
-                className="grid grid-cols-6 gap-2 text-xs py-1.5 px-1 hover:bg-muted/50 rounded border-b border-border/50 last:border-0"
+                className="grid grid-cols-7 gap-2 text-xs py-1.5 px-1 hover:bg-muted/50 rounded border-b border-border/50 last:border-0"
               >
                 <div className="font-mono text-[10px] text-muted-foreground">
                   {formatOrderId(order._id)}
                 </div>
+                <div className="font-medium">{order.token ?? "CNVX"}</div>
                 <div className="capitalize">{order.type}</div>
                 <div
                   className={`font-medium ${

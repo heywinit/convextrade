@@ -15,8 +15,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-export function Chart() {
-  const priceHistory = useQuery((api as any).priceHistory.getPriceHistory, { limit: 100 });
+export function Chart({ token }: { token: string }) {
+  const priceHistory = useQuery((api as any).priceHistory.getPriceHistory, { token, limit: 100 });
 
   if (!priceHistory || priceHistory.length === 0) {
     return (

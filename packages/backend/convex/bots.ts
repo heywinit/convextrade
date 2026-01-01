@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalAction, internalMutation, mutation, query } from "./_generated/server";
 
 // Initialize bot users (5 bots)
 export const initializeBots = internalMutation({
@@ -25,8 +25,9 @@ export const initializeBots = internalMutation({
       if (!existing) {
         const botId = await ctx.db.insert("users", {
           username: name,
-          balance: 1000, // Bots start with more capital
-          cnvxAmount: 1000, // And more CNVX
+          balance: 1000, // Bots start with $1000 USD
+          cnvxAmount: 0, // Start with 0 tokens
+          tokenBalances: { CNVX: 0, BUN: 0, NEXT: 0, SHAD: 0 }, // Start with 0 of each token
           isBot: true,
         });
         bots.push(botId);
@@ -54,32 +55,34 @@ export const getBots = query({
 export const botTrade = internalMutation({
   args: {
     botId: v.id("users"),
+    token: v.optional(v.string()), // Token symbol, defaults to "CNVX"
   },
   handler: async (ctx, args) => {
+    const token = args.token ?? "CNVX"; // Default to CNVX
     const bot = await ctx.db.get(args.botId);
     if (!bot || !bot.isBot) {
       return { success: false, reason: "Not a bot" };
     }
 
-    // Get current market price
+    // Get current market price for the token
     const lastTrade = await ctx.db
       .query("trades")
-      .withIndex("by_timestamp")
+      .withIndex("by_token_timestamp", (q: any) => q.eq("token", token))
       .order("desc")
       .first();
     const currentPrice = lastTrade?.price ?? 10.0;
 
-    // Get orderbook to understand market depth
+    // Get orderbook to understand market depth for the token
     const buyOrders = await ctx.db
       .query("orders")
-      .withIndex("by_side_status", (q: any) =>
-        q.eq("side", "buy").eq("status", "pending"),
+      .withIndex("by_token_side_status", (q: any) =>
+        q.eq("token", token).eq("side", "buy").eq("status", "pending"),
       )
       .collect();
     const sellOrders = await ctx.db
       .query("orders")
-      .withIndex("by_side_status", (q: any) =>
-        q.eq("side", "sell").eq("status", "pending"),
+      .withIndex("by_token_side_status", (q: any) =>
+        q.eq("token", token).eq("side", "sell").eq("status", "pending"),
       )
       .collect();
 
@@ -98,6 +101,29 @@ export const botTrade = internalMutation({
     // 4. Add depth at various price levels
 
     const action = Math.random();
+
+    // Helper function to get token balance
+    const getTokenBalance = (tokenSymbol: string): number => {
+      if (tokenSymbol === "CNVX") {
+        return bot.cnvxAmount ?? (bot.tokenBalances as any)?.[tokenSymbol] ?? 0;
+      }
+      return (bot.tokenBalances as any)?.[tokenSymbol] ?? 0;
+    };
+
+    // Helper function to update token balance
+    const updateTokenBalance = async (tokenSymbol: string, amount: number) => {
+      const currentBalances = (bot.tokenBalances as any) ?? {};
+      if (tokenSymbol === "CNVX") {
+        await ctx.db.patch(args.botId, {
+          cnvxAmount: amount,
+          tokenBalances: { ...currentBalances, [tokenSymbol]: amount },
+        });
+      } else {
+        await ctx.db.patch(args.botId, {
+          tokenBalances: { ...currentBalances, [tokenSymbol]: amount },
+        });
+      }
+    };
 
     try {
       if (action < 0.4) {
@@ -128,7 +154,7 @@ export const botTrade = internalMutation({
             price = bestAsk - 0.01;
           }
 
-          const quantity = 0.5 + Math.random() * 2; // 0.5 to 2.5 CNVX
+          const quantity = 0.5 + Math.random() * 2; // 0.5 to 2.5 tokens
           const totalCost = price * quantity;
 
           if (bot.balance >= totalCost) {
@@ -138,6 +164,7 @@ export const botTrade = internalMutation({
 
             const orderId = await ctx.db.insert("orders", {
               userId: args.botId,
+              token,
               type: "limit",
               side: "buy",
               price: price,
@@ -156,8 +183,9 @@ export const botTrade = internalMutation({
           }
         }
       } else if (action < 0.8) {
-        // 40% chance: Place limit sell order (if we have CNVX)
-        if (bot.cnvxAmount > 0.5) {
+        // 40% chance: Place limit sell order (if we have tokens)
+        const tokenBalance = getTokenBalance(token);
+        if (tokenBalance > 0.5) {
           let price: number;
 
           // If there's a best ask, place order slightly below it (to compete) or at it
@@ -183,15 +211,14 @@ export const botTrade = internalMutation({
             price = bestBid + 0.01;
           }
 
-          const quantity = 0.5 + Math.random() * 2; // 0.5 to 2.5 CNVX
+          const quantity = 0.5 + Math.random() * 2; // 0.5 to 2.5 tokens
 
-          if (bot.cnvxAmount >= quantity) {
-            await ctx.db.patch(args.botId, {
-              cnvxAmount: bot.cnvxAmount - quantity,
-            });
+          if (tokenBalance >= quantity) {
+            await updateTokenBalance(token, tokenBalance - quantity);
 
             const orderId = await ctx.db.insert("orders", {
               userId: args.botId,
+              token,
               type: "limit",
               side: "sell",
               price: price,
@@ -213,7 +240,7 @@ export const botTrade = internalMutation({
         // 20% chance: Place market order for activity
         if (action < 0.9 && bot.balance > 50 && sortedSells.length > 0) {
           // Market buy
-          const quantity = 0.3 + Math.random() * 0.7; // 0.3 to 1.0 CNVX
+          const quantity = 0.3 + Math.random() * 0.7; // 0.3 to 1.0 tokens
           const estimatedPrice = sortedSells[0].price;
           const totalCost = estimatedPrice * quantity;
 
@@ -224,6 +251,7 @@ export const botTrade = internalMutation({
 
             const orderId = await ctx.db.insert("orders", {
               userId: args.botId,
+              token,
               type: "market",
               side: "buy",
               price: estimatedPrice,
@@ -239,31 +267,33 @@ export const botTrade = internalMutation({
 
             return { success: true, action: "market_buy", quantity };
           }
-        } else if (bot.cnvxAmount > 0.3 && sortedBuys.length > 0) {
-          // Market sell
-          const quantity = 0.3 + Math.random() * 0.7; // 0.3 to 1.0 CNVX
+        } else {
+          const tokenBalance = getTokenBalance(token);
+          if (tokenBalance > 0.3 && sortedBuys.length > 0) {
+            // Market sell
+            const quantity = 0.3 + Math.random() * 0.7; // 0.3 to 1.0 tokens
 
-          if (bot.cnvxAmount >= quantity) {
-            await ctx.db.patch(args.botId, {
-              cnvxAmount: bot.cnvxAmount - quantity,
-            });
+            if (tokenBalance >= quantity) {
+              await updateTokenBalance(token, tokenBalance - quantity);
 
-            const orderId = await ctx.db.insert("orders", {
-              userId: args.botId,
-              type: "market",
-              side: "sell",
-              price: sortedBuys[0].price,
-              quantity: Math.round(quantity * 10000) / 10000,
-              filledQuantity: 0,
-              status: "pending",
-              createdAt: Date.now(),
-            });
+              const orderId = await ctx.db.insert("orders", {
+                userId: args.botId,
+                token,
+                type: "market",
+                side: "sell",
+                price: sortedBuys[0].price,
+                quantity: Math.round(quantity * 10000) / 10000,
+                filledQuantity: 0,
+                status: "pending",
+                createdAt: Date.now(),
+              });
 
-            await ctx.runMutation(internal.orders.matchOrdersInternal, {
-              orderId,
-            });
+              await ctx.runMutation(internal.orders.matchOrdersInternal, {
+                orderId,
+              });
 
-            return { success: true, action: "market_sell", quantity };
+              return { success: true, action: "market_sell", quantity };
+            }
           }
         }
       }
@@ -280,8 +310,11 @@ export const botTrade = internalMutation({
 
 // Run bot trading for all bots
 export const runBotTrading = internalMutation({
-  args: {},
-  handler: async (ctx): Promise<Array<{ botId: any; result: any }>> => {
+  args: {
+    token: v.optional(v.string()), // Token symbol, defaults to "CNVX"
+  },
+  handler: async (ctx, args): Promise<Array<{ botId: any; result: any }>> => {
+    const token = args.token ?? "CNVX"; // Default to CNVX
     const bots = await ctx.db
       .query("users")
       .filter((q: any) => q.eq(q.field("isBot"), true))
@@ -294,6 +327,7 @@ export const runBotTrading = internalMutation({
       if (Math.random() < 0.3) {
         const result: any = await ctx.runMutation(internal.bots.botTrade, {
           botId: bot._id,
+          token,
         });
         results.push({ botId: bot._id, result });
       }
@@ -303,13 +337,49 @@ export const runBotTrading = internalMutation({
   },
 });
 
-// Public mutation to trigger bot trading (can be called from frontend or scheduled)
+// Public mutation to trigger bot trading (kept for manual triggering if needed)
 export const triggerBotTrading = mutation({
-  args: {},
-  handler: async (ctx): Promise<Array<{ botId: any; result: any }>> => {
+  args: {
+    token: v.optional(v.string()), // Token symbol, defaults to "CNVX"
+  },
+  handler: async (ctx, args): Promise<Array<{ botId: any; result: any }>> => {
+    const token = args.token ?? "CNVX"; // Default to CNVX
     // Initialize bots if they don't exist
     await ctx.runMutation(internal.bots.initializeBots, {});
-    // Run bot trading
-    return await ctx.runMutation(internal.bots.runBotTrading, {});
+    // Run bot trading for the specified token
+    return await ctx.runMutation(internal.bots.runBotTrading, { token });
+  },
+});
+
+// Self-scheduling action that runs bot trading continuously
+// This runs server-side and doesn't require frontend polling
+// Once started, it schedules itself to run again every 500ms
+export const runBotTradingForAllTokens = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const tokens = ["CNVX", "BUN", "NEXT", "SHAD"];
+    
+    // Initialize bots if they don't exist
+    await ctx.runMutation(internal.bots.initializeBots, {});
+    
+    // Run bot trading for all tokens
+    for (const token of tokens) {
+      await ctx.runMutation(internal.bots.runBotTrading, { token });
+    }
+    
+    await ctx.scheduler.runAfter(500, internal.bots.runBotTradingForAllTokens, {});
+  },
+});
+
+// Public mutation to manually start the bot trading loop (optional)
+// The cron job will also start it automatically
+export const startBotTradingLoop = mutation({
+  args: {},
+  handler: async (ctx) => {
+    // Initialize bots if they don't exist
+    await ctx.runMutation(internal.bots.initializeBots, {});
+    // Start the self-scheduling loop
+    await ctx.scheduler.runAfter(0, internal.bots.runBotTradingForAllTokens, {});
+    return { success: true, message: "Bot trading loop started" };
   },
 });
