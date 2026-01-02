@@ -254,3 +254,47 @@ export const logout = mutation({
     return { success: true };
   },
 });
+
+// Get or create user by device ID (auto-login without password)
+export const getOrCreateUserByDeviceId = mutation({
+  args: {
+    deviceId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Try to find existing user by deviceId
+    const existingUser = await ctx.db
+      .query("users")
+      .withIndex("by_deviceId", (q: any) => q.eq("deviceId", args.deviceId))
+      .first();
+
+    if (existingUser) {
+      // Return existing user
+      return {
+        userId: existingUser._id,
+        balance: existingUser.balance,
+        cnvxAmount: existingUser.cnvxAmount,
+        tokenBalances: existingUser.tokenBalances,
+      };
+    }
+
+    // Create new user with initial $1000 USD and 0 of each token
+    const userId = await ctx.db.insert("users", {
+      deviceId: args.deviceId,
+      balance: 1000,
+      cnvxAmount: 0,
+      tokenBalances: { CNVX: 0, BUN: 0, NEXT: 0, SHAD: 0 },
+    });
+
+    const newUser = await ctx.db.get(userId);
+    if (!newUser) {
+      throw new Error("Failed to create user");
+    }
+
+    return {
+      userId: newUser._id,
+      balance: newUser.balance,
+      cnvxAmount: newUser.cnvxAmount,
+      tokenBalances: newUser.tokenBalances,
+    };
+  },
+});

@@ -5,12 +5,14 @@ export default defineSchema({
   users: defineTable({
     username: v.optional(v.string()),
     passwordHash: v.optional(v.string()),
+    deviceId: v.optional(v.string()), // Device identifier for auto-login
     balance: v.number(), // USD balance
     tokenBalances: v.optional(v.any()), // Map of token -> amount (e.g., { "CNVX": 500, "ETH": 10 })
     cnvxAmount: v.number(), // CNVX token amount (kept for backward compatibility)
     isBot: v.optional(v.boolean()),
   })
-    .index("by_username", ["username"]),
+    .index("by_username", ["username"])
+    .index("by_deviceId", ["deviceId"]),
 
   sessions: defineTable({
     userId: v.id("users"),
@@ -21,7 +23,7 @@ export default defineSchema({
 
   orders: defineTable({
     userId: v.id("users"),
-    token: v.string(), // Token symbol (e.g., "CNVX", "ETH", "BTC")
+    token: v.optional(v.string()), // Token symbol (e.g., "CNVX", "ETH", "BTC") - optional for backward compatibility
     type: v.union(v.literal("limit"), v.literal("market")),
     side: v.union(v.literal("buy"), v.literal("sell")),
     price: v.number(), // For limit orders, null for market orders
@@ -40,7 +42,7 @@ export default defineSchema({
   trades: defineTable({
     buyOrderId: v.id("orders"),
     sellOrderId: v.id("orders"),
-    token: v.string(), // Token symbol
+    token: v.optional(v.string()), // Token symbol - optional for backward compatibility
     price: v.number(),
     quantity: v.number(),
     timestamp: v.number(),
@@ -49,7 +51,7 @@ export default defineSchema({
     .index("by_token_timestamp", ["token", "timestamp"]),
 
   priceHistory: defineTable({
-    token: v.string(), // Token symbol
+    token: v.optional(v.string()), // Token symbol - optional for backward compatibility
     price: v.number(),
     timestamp: v.number(),
     volume: v.number(),

@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as bots from "../bots.js";
+import type * as cron from "../cron.js";
 import type * as healthCheck from "../healthCheck.js";
 import type * as orders from "../orders.js";
 import type * as priceHistory from "../priceHistory.js";
@@ -24,6 +25,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   bots: typeof bots;
+  cron: typeof cron;
   healthCheck: typeof healthCheck;
   orders: typeof orders;
   priceHistory: typeof priceHistory;

@@ -1,4 +1,4 @@
-import { query } from "./_generated/server";
+import { query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 
 // Get price history for chart - optimized
@@ -32,6 +32,28 @@ export const getPriceHistory = query({
 
     // Reverse to get chronological order (oldest to newest)
     return history.reverse();
+  },
+});
+
+// Migration: Backfill missing token field for existing priceHistory records
+// This should be run once to fix existing records that don't have the token field
+export const backfillPriceHistoryTokens = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const allHistory = await ctx.db.query("priceHistory").collect();
+    let updated = 0;
+    
+    for (const record of allHistory) {
+      // Check if token field is missing (undefined or null)
+      if (!record.token) {
+        await ctx.db.patch(record._id, {
+          token: "CNVX", // Default to CNVX for backward compatibility
+        });
+        updated++;
+      }
+    }
+    
+    return { updated, total: allHistory.length };
   },
 });
 

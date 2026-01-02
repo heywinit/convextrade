@@ -304,6 +304,7 @@ export const placeMarketOrder = mutation({
         const errorMsg = "No matching orders available";
         await ctx.db.insert("orders", {
           userId: args.userId,
+          token,
           type: "market",
           side: args.side,
           price: 0,
@@ -429,10 +430,11 @@ async function matchOrders(ctx: any, newOrderId: string) {
 
   // Find matching orders for the same token
   const oppositeSide = newOrder.side === "buy" ? "sell" : "buy";
+  const orderToken = newOrder.token ?? "CNVX"; // Default to CNVX for backward compatibility
   const matchingOrders = await ctx.db
     .query("orders")
     .withIndex("by_token_side_status", (q: any) => 
-      q.eq("token", newOrder.token).eq("side", oppositeSide).eq("status", "pending"))
+      q.eq("token", orderToken).eq("side", oppositeSide).eq("status", "pending"))
     .collect();
 
   // Sort matching orders by price
@@ -478,7 +480,8 @@ async function executeTrade(
   price: number,
   quantity: number,
 ) {
-  const token = order1.token; // Both orders should have the same token
+  // Get token from either order, defaulting to "CNVX" for backward compatibility
+  const token = order1.token ?? order2.token ?? "CNVX";
   
   // Record the trade
   await ctx.db.insert("trades", {
@@ -586,6 +589,55 @@ export const getUserOrderHistory = query({
       .withIndex("by_user", (q: any) => q.eq("userId", args.userId))
       .order("desc")
       .take(50); // Last 50 orders
+  },
+});
+
+// Migration: Backfill missing token field for existing orders
+// This should be run once to fix existing orders that don't have the token field
+export const backfillOrderTokens = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const orders = await ctx.db.query("orders").collect();
+    let updated = 0;
+    
+    for (const order of orders) {
+      // Check if token field is missing (undefined or null)
+      if (!order.token) {
+        await ctx.db.patch(order._id, {
+          token: "CNVX", // Default to CNVX for backward compatibility
+        });
+        updated++;
+      }
+    }
+    
+    return { updated, total: orders.length };
+  },
+});
+
+// Migration: Backfill missing token field for existing trades
+// This should be run once to fix existing trades that don't have the token field
+export const backfillTradeTokens = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const trades = await ctx.db.query("trades").collect();
+    let updated = 0;
+    
+    for (const trade of trades) {
+      // Check if token field is missing (undefined or null)
+      if (!trade.token) {
+        // Try to get token from the buy order first, then sell order, then default to CNVX
+        const buyOrder = await ctx.db.get(trade.buyOrderId);
+        const sellOrder = await ctx.db.get(trade.sellOrderId);
+        const token = buyOrder?.token ?? sellOrder?.token ?? "CNVX";
+        
+        await ctx.db.patch(trade._id, {
+          token, // Use token from associated order, or default to CNVX
+        });
+        updated++;
+      }
+    }
+    
+    return { updated, total: trades.length };
   },
 });
 
