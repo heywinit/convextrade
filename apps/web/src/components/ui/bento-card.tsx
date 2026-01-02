@@ -29,11 +29,7 @@ export function BentoCard({
     <Card className={cn("py-0 pt-4 pb-2", className)}>
       <CardHeader className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <IconButton
-            icon={Icon}
-            bgColor={iconBgColor}
-            iconColor={iconColor}
-          />
+          <IconButton icon={Icon} bgColor={iconBgColor} iconColor={iconColor} />
           <CardTitle>
             <h1>{title}</h1>
           </CardTitle>
@@ -47,7 +43,12 @@ export function BentoCard({
       <CardContent className="relative pb-0">
         <div className="pb-2 font-bold text-4xl">{value}</div>
         {subtitle && (
-          <div className={cn("absolute right-2 bottom-0 rounded-full px-3 py-1 font-medium text-sm", subtitleClassName)}>
+          <div
+            className={cn(
+              "absolute right-2 bottom-0 rounded-full px-3 py-1 font-medium text-sm",
+              subtitleClassName,
+            )}
+          >
             {subtitle}
           </div>
         )}
@@ -55,4 +56,3 @@ export function BentoCard({
     </Card>
   );
 }
-

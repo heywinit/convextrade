@@ -27,7 +27,7 @@ export const initializeBots = internalMutation({
           username: name,
           balance: 1000, // Bots start with $1000 USD
           cnvxAmount: 0, // Start with 0 tokens
-          tokenBalances: { CNVX: 0, BUN: 0, NEXT: 0, SHAD: 0 }, // Start with 0 of each token
+          tokenBalances: { CNVX: 0, BUN: 0, VITE: 0, SHAD: 0, FLWR: 0 }, // Start with 0 of each token
           isBot: true,
         });
         bots.push(botId);
@@ -357,7 +357,7 @@ export const triggerBotTrading = mutation({
 export const runBotTradingForAllTokens = internalAction({
   args: {},
   handler: async (ctx) => {
-    const tokens = ["CNVX", "BUN", "NEXT", "SHAD"];
+    const tokens = ["CNVX", "BUN", "VITE", "SHAD", "FLWR"];
     
     // Initialize bots if they don't exist
     await ctx.runMutation(internal.bots.initializeBots, {});

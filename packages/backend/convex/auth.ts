@@ -59,7 +59,7 @@ export const register = mutation({
       passwordHash,
       balance: 1000,
       cnvxAmount: 0,
-      tokenBalances: { CNVX: 0, BUN: 0, NEXT: 0, SHAD: 0 },
+      tokenBalances: { CNVX: 0, BUN: 0, VITE: 0, SHAD: 0, FLWR: 0 },
     });
 
     // Create session
@@ -140,7 +140,7 @@ export const loginOrRegister = mutation({
       passwordHash,
       balance: 1000,
       cnvxAmount: 0,
-      tokenBalances: { CNVX: 0, BUN: 0, NEXT: 0, SHAD: 0 },
+      tokenBalances: { CNVX: 0, BUN: 0, VITE: 0, SHAD: 0, FLWR: 0 },
     });
 
     // Create session
@@ -282,7 +282,7 @@ export const getOrCreateUserByDeviceId = mutation({
       deviceId: args.deviceId,
       balance: 1000,
       cnvxAmount: 0,
-      tokenBalances: { CNVX: 0, BUN: 0, NEXT: 0, SHAD: 0 },
+      tokenBalances: { CNVX: 0, BUN: 0, VITE: 0, SHAD: 0, FLWR: 0 },
     });
 
     const newUser = await ctx.db.get(userId);
