@@ -2,23 +2,28 @@
   "name": "web",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "next dev --port 3001",
-    "build": "next build",
-    "start": "next start"
+    "build": "vite build",
+    "serve": "vite preview",
+    "dev": "vite dev"
   },
   "dependencies": {
     "@base-ui/react": "^1.0.0",
     "@convextrade/backend": "workspace:*",
     "@convextrade/env": "workspace:*",
+    "@tailwindcss/vite": "^4.1.8",
     "@tanstack/react-form": "^1.27.3",
-    "babel-plugin-react-compiler": "^1.0.0",
+    "@tanstack/react-query": "^5.90.12",
+    "@tanstack/react-router": "^1.141.1",
+    "@tanstack/react-router-with-query": "^1.130.17",
+    "@tanstack/react-start": "^1.141.1",
+    "@tanstack/router-plugin": "^1.141.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "convex": "catalog:",
     "dotenv": "catalog:",
     "lucide-react": "^0.546.0",
-    "next": "^16.1.1",
     "next-themes": "^0.4.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
@@ -26,16 +31,18 @@
     "shadcn": "^3.6.2",
     "sonner": "^2.0.5",
     "tailwind-merge": "^3.3.1",
+    "tailwindcss": "^4.1.3",
     "tw-animate-css": "^1.3.4",
+    "vite-tsconfig-paths": "^5.1.4",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.10",
-    "@types/node": "^20",
+    "@tanstack/react-router-devtools": "^1.141.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "tailwindcss": "^4.1.10",
+    "@vitejs/plugin-react": "^5.0.4",
     "typescript": "catalog:",
+    "vite": "^7.0.2",
     "@convextrade/config": "workspace:*"
   }
 }
