@@ -161,11 +161,18 @@ function HomeComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-8">
       <main className="w-full max-w-5xl">
-        <div className="flex items-center justify-between rounded-t-2xl border-card border-x-2 border-t-2 bg-card p-2">
-          <span className="font-bold text-2xl">ConvexTrade</span>
-          <span className="font-bold text-lg">$1,000</span>
+        <div className="flex items-center justify-between rounded-t-2xl border-card border-x-4 border-t-4 bg-card/50 py-2 pr-2 pl-4 shadow-sm backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            <h1 className="font-bold text-3xl tracking-tight">ConvexTrade</h1>
+          </div>
+          <div className="flex items-center gap-4 rounded-lg bg-muted/50 px-4 py-2">
+            <span className="font-medium text-muted-foreground text-sm">
+              Balance
+            </span>
+            <span className="font-bold text-xl tabular-nums">$1,000.00</span>
+          </div>
         </div>
-        <div className="mx-auto grid w-full grid-cols-3 grid-rows-3 gap-2 rounded-b-4xl border-2 border-card p-2">
+        <div className="mx-auto grid w-full grid-cols-3 grid-rows-3 gap-2 rounded-b-4xl border-4 border-card p-2">
           {/* Token Cards */}
           <TokenCard
             symbol="CNVX"
