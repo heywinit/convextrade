@@ -6,6 +6,7 @@ interface IconButtonProps {
   bgColor: string;
   iconColor: string;
   className?: string;
+  onClick?: () => void;
 }
 
 export function IconButton({
@@ -13,6 +14,7 @@ export function IconButton({
   bgColor,
   iconColor,
   className,
+  onClick,
 }: IconButtonProps) {
   return (
     <div
@@ -21,6 +23,9 @@ export function IconButton({
         bgColor,
         className,
       )}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
     >
       <Icon strokeWidth={1.5} className={cn("size-4", iconColor)} />
     </div>

@@ -18,9 +18,10 @@ type TokenDataMap = {
 
 type TokensViewProps = {
   tokenDataMap: TokenDataMap;
+  onTokenExpand?: (tokenSymbol: string) => void;
 };
 
-export function TokensView({ tokenDataMap }: TokensViewProps) {
+export function TokensView({ tokenDataMap, onTokenExpand }: TokensViewProps) {
   return (
     <>
       {TOKENS.slice(0, 4).map((token: TokenConfig) => {
@@ -35,6 +36,9 @@ export function TokensView({ tokenDataMap }: TokensViewProps) {
             price={data.price}
             changePercentage={data.changePercentage}
             chartData={data.chartData}
+            onExpand={
+              onTokenExpand ? () => onTokenExpand(token.symbol) : undefined
+            }
           />
         );
       })}
@@ -89,6 +93,9 @@ export function TokensView({ tokenDataMap }: TokensViewProps) {
             price={data.price}
             changePercentage={data.changePercentage}
             chartData={data.chartData}
+            onExpand={
+              onTokenExpand ? () => onTokenExpand(token.symbol) : undefined
+            }
           />
         );
       })}

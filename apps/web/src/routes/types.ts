@@ -48,7 +48,7 @@ export const TOKENS: TokenConfig[] = [
   },
 ];
 
-export type ViewMode = "tokens" | "bots" | "trades";
+export type ViewMode = "tokens" | "bots" | "trades" | "token-detail";
 
 export const PRICE_HISTORY_LIMIT = 30;
 export const MIN_CHART_DATA_POINTS = 2;

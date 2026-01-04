@@ -14,6 +14,7 @@ interface TokenCardProps {
   changePercentage: number;
   chartData: Array<{ timestamp: number; price: number }>;
   className?: string;
+  onExpand?: () => void;
 }
 
 export function TokenCard({
@@ -25,6 +26,7 @@ export function TokenCard({
   changePercentage,
   chartData,
   className,
+  onExpand,
 }: TokenCardProps) {
   const isPositive = changePercentage >= 0;
   const chartColor = isPositive ? "rgb(34, 197, 94)" : "rgb(239, 68, 68)";
@@ -58,6 +60,8 @@ export function TokenCard({
           icon={Expand}
           bgColor="bg-card"
           iconColor="text-muted-foreground"
+          onClick={onExpand}
+          className={cn(onExpand && "cursor-pointer hover:bg-muted")}
         />
       </CardHeader>
       <CardContent className="relative z-10 min-h-[140px] pb-0">

@@ -4,10 +4,13 @@ import { useMutation, useQuery } from "convex/react";
 import { Activity, Bot, Coins, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useTokenData } from "./hooks";
 import type { ViewMode } from "./types";
+import { TOKENS } from "./types";
 import { formatCurrency, getOrCreateDeviceId } from "./utils";
 import { BotsView } from "./views/bots-view";
+import { TokenDetailView } from "./views/token-detail-view";
 import { TokensView } from "./views/tokens-view";
 import { TradesView } from "./views/trades-view";
 
@@ -18,6 +21,7 @@ export const Route = createFileRoute("/")({
 function HomeComponent() {
   const [deviceId, setDeviceId] = useState<string>("");
   const [viewMode, setViewMode] = useState<ViewMode>("tokens");
+  const [selectedToken, setSelectedToken] = useState<string | null>(null);
   const getOrCreateUser = useMutation(api.auth.getOrCreateUserByDeviceId);
   const startBotTrading = useMutation(api.bots.startBotTradingLoop);
   const initializePriceHistory = useMutation(
@@ -97,10 +101,37 @@ function HomeComponent() {
             </span>
           </div>
         </div>
-        <div className="mx-auto grid h-[650px] w-full grid-cols-3 grid-rows-2 gap-2 rounded-bl-4xl border-4 border-card p-2">
-          {viewMode === "tokens" && <TokensView tokenDataMap={tokenDataMap} />}
+        <div
+          className={cn(
+            "mx-auto w-full rounded-bl-4xl border-4 border-card p-2",
+            viewMode !== "token-detail" && "grid grid-cols-3 grid-rows-2 gap-2",
+          )}
+        >
+          {viewMode === "tokens" && (
+            <TokensView
+              tokenDataMap={tokenDataMap}
+              onTokenExpand={(tokenSymbol) => {
+                setSelectedToken(tokenSymbol);
+                setViewMode("token-detail");
+              }}
+            />
+          )}
           {viewMode === "bots" && <BotsView tokenDataMap={tokenDataMap} />}
           {viewMode === "trades" && <TradesView />}
+          {viewMode === "token-detail" && selectedToken && (
+            <TokenDetailView
+              tokenSymbol={selectedToken}
+              tokenData={
+                tokenDataMap[selectedToken as keyof typeof tokenDataMap]
+              }
+              tokenConfig={TOKENS.find((t) => t.symbol === selectedToken)}
+              userId={user?._id}
+              onBack={() => {
+                setViewMode("tokens");
+                setSelectedToken(null);
+              }}
+            />
+          )}
         </div>
         <div className="flex items-center justify-end gap-2 rounded-b-4xl">
           <div className="w-min rounded-b-3xl border-4 border-card border-t-0 p-2">
@@ -111,7 +142,12 @@ function HomeComponent() {
                   variant={viewMode === mode ? "default" : "outline"}
                   className="rounded-full"
                   size="icon"
-                  onClick={() => setViewMode(mode)}
+                  onClick={() => {
+                    setViewMode(mode);
+                    if (mode !== "token-detail") {
+                      setSelectedToken(null);
+                    }
+                  }}
                   title={title}
                 >
                   <Icon />

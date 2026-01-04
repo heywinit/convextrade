@@ -3,6 +3,8 @@
 @import "shadcn/tailwind.css";
 @import "./theme.css";
 
+@custom-variant dark (&:is(.dark *));
+
 :root {
   --font-plus-jakarta-sans: "Plus Jakarta Sans", ui-sans-serif, sans-serif, system-ui;
 }
@@ -10,4 +12,13 @@
 /* Recharts axis text styling */
 .recharts-cartesian-axis-tick text {
   fill: oklch(var(--muted-foreground));
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }
