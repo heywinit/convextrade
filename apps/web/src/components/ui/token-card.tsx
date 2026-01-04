@@ -10,7 +10,7 @@ interface TokenCardProps {
   icon: LucideIcon;
   iconBgColor?: string;
   iconColor?: string;
-  price: number;
+  price: number | undefined;
   changePercentage: number;
   chartData: Array<{ timestamp: number; price: number }>;
   className?: string;
@@ -36,13 +36,9 @@ export function TokenCard({
   }));
 
   // Ensure we have at least 2 data points (charts need at least 2 points to render)
-  // If we have less than 2 points, generate sample data with variation
+  // If we have less than 2 points or no price, use empty data
   const hasEnoughData = formattedData.length >= 2;
-  const displayData = hasEnoughData
-    ? formattedData
-    : Array.from({ length: 20 }, (_, i) => ({
-        value: price * (1 + Math.sin(i / 3) * 0.1),
-      }));
+  const displayData = hasEnoughData && price !== undefined ? formattedData : [];
 
   return (
     <Card
@@ -66,69 +62,75 @@ export function TokenCard({
       </CardHeader>
       <CardContent className="relative z-10 min-h-[140px] pb-0">
         <div className="flex items-center gap-2">
-          <div className="pb-2 font-bold text-4xl">${price.toFixed(2)}</div>
+          <div className="pb-2 font-bold text-4xl tabular-nums">
+            {price !== undefined ? `$${price.toFixed(2)}` : "—"}
+          </div>
+          {changePercentage !== undefined && changePercentage !== null && (
+            <div
+              className={cn(
+                "rounded-full px-3 py-1 font-medium text-xs tabular-nums",
+                isPositive
+                  ? "bg-green-500/20 text-green-500"
+                  : "bg-red-500/20 text-red-600 dark:bg-red-500/30 dark:text-red-400",
+              )}
+            >
+              {isPositive ? "+" : ""}
+              {changePercentage.toFixed(2)}%
+            </div>
+          )}
+        </div>
+        {/* Background chart - only render when we have data */}
+        {displayData.length >= 2 && (
           <div
-            className={cn(
-              "rounded-full px-3 py-1 font-medium text-xs",
-              isPositive
-                ? "bg-green-500/20 text-green-500"
-                : "bg-red-500/20 text-red-600 dark:bg-red-500/30 dark:text-red-400",
-            )}
+            className="pointer-events-none absolute right-0 bottom-0 left-0 z-0 overflow-hidden"
+            style={{ height: "60px", minWidth: "100px" }}
           >
-            {isPositive ? "+" : ""}
-            {changePercentage.toFixed(2)}%
+            <div className="h-full w-full" style={{ minWidth: "100px" }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={displayData}
+                  margin={{
+                    left: 0,
+                    right: 0,
+                    top: -5,
+                    bottom: 0,
+                  }}
+                >
+                  <defs>
+                    <linearGradient
+                      id={`gradient-${symbol}`}
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="0%"
+                        stopColor={chartColor}
+                        stopOpacity={0.6}
+                      />
+                      <stop
+                        offset="100%"
+                        stopColor={chartColor}
+                        stopOpacity={0.15}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <Area
+                    dataKey="value"
+                    fill={`url(#gradient-${symbol})`}
+                    stroke={chartColor}
+                    strokeWidth={4}
+                    type="monotone"
+                    dot={false}
+                    activeDot={false}
+                    isAnimationActive={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        </div>
-        {/* Background chart */}
-        <div
-          className="pointer-events-none absolute right-0 bottom-0 left-0 z-0 overflow-hidden"
-          style={{ height: "60px" }}
-        >
-          <div className="h-full w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={displayData}
-                margin={{
-                  left: 0,
-                  right: 0,
-                  top: -5,
-                  bottom: 0,
-                }}
-              >
-                <defs>
-                  <linearGradient
-                    id={`gradient-${symbol}`}
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop
-                      offset="0%"
-                      stopColor={chartColor}
-                      stopOpacity={0.6}
-                    />
-                    <stop
-                      offset="100%"
-                      stopColor={chartColor}
-                      stopOpacity={0.15}
-                    />
-                  </linearGradient>
-                </defs>
-                <Area
-                  dataKey="value"
-                  fill={`url(#gradient-${symbol})`}
-                  stroke={chartColor}
-                  strokeWidth={4}
-                  type="monotone"
-                  dot={false}
-                  activeDot={false}
-                  isAnimationActive={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { Coins, Flower2, Gem, Sparkles, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { TokenCard } from "@/components/ui/token-card";
 
 export const Route = createFileRoute("/")({
@@ -22,39 +22,26 @@ function getOrCreateDeviceId(): string {
   return deviceId;
 }
 
-// Generate sample chart data for a token
-function generateChartData(basePrice: number, volatility = 0.02, points = 30) {
-  const now = Date.now();
-  const data = [];
-  let currentPrice = basePrice;
-
-  for (let i = points; i >= 0; i--) {
-    const timestamp = now - i * 60000; // 1 minute intervals
-    // Random walk with slight upward/downward bias
-    const change = (Math.random() - 0.5) * volatility * basePrice;
-    currentPrice = Math.max(0.01, currentPrice + change);
-    data.push({ timestamp, price: currentPrice });
-  }
-
-  return data;
-}
-
 function HomeComponent() {
-  const [_userId, setUserId] = useState<string | null>(null);
-  const [_deviceId, setDeviceId] = useState<string>("");
+  const [deviceId, setDeviceId] = useState<string>("");
   const getOrCreateUser = useMutation(api.auth.getOrCreateUserByDeviceId);
+  const startBotTrading = useMutation(api.bots.startBotTradingLoop);
+  const initializePriceHistory = useMutation(
+    api.priceHistory.initializePriceHistory,
+  );
+
+  // Fetch user data by deviceId
+  const user = useQuery(
+    api.users.getUserByDeviceId,
+    deviceId ? { deviceId } : "skip",
+  );
 
   // Fetch current prices for tokens
-  const cnvxPrice =
-    useQuery(api.orders.getCurrentPrice, { token: "CNVX" }) ?? 10.0;
-  const bunPrice =
-    useQuery(api.orders.getCurrentPrice, { token: "BUN" }) ?? 5.0;
-  const vitePrice =
-    useQuery(api.orders.getCurrentPrice, { token: "VITE" }) ?? 15.0;
-  const shadPrice =
-    useQuery(api.orders.getCurrentPrice, { token: "SHAD" }) ?? 8.0;
-  const flwrPrice =
-    useQuery(api.orders.getCurrentPrice, { token: "FLWR" }) ?? 12.0;
+  const cnvxPrice = useQuery(api.orders.getCurrentPrice, { token: "CNVX" });
+  const bunPrice = useQuery(api.orders.getCurrentPrice, { token: "BUN" });
+  const vitePrice = useQuery(api.orders.getCurrentPrice, { token: "VITE" });
+  const shadPrice = useQuery(api.orders.getCurrentPrice, { token: "SHAD" });
+  const flwrPrice = useQuery(api.orders.getCurrentPrice, { token: "FLWR" });
 
   // Fetch price history for charts
   const cnvxHistory =
@@ -73,7 +60,7 @@ function HomeComponent() {
     useQuery(api.priceHistory.getPriceHistory, { token: "FLWR", limit: 30 }) ??
     [];
 
-  // Generate chart data from history or fallback to sample data
+  // Generate chart data from history
   // Charts need at least 2 data points to render properly
   const cnvxChartData = useMemo(() => {
     if (cnvxHistory.length >= 2) {
@@ -82,8 +69,8 @@ function HomeComponent() {
         price: item.price,
       }));
     }
-    return generateChartData(cnvxPrice, 0.02, 30);
-  }, [cnvxHistory, cnvxPrice]);
+    return [];
+  }, [cnvxHistory]);
 
   const bunChartData = useMemo(() => {
     if (bunHistory.length >= 2) {
@@ -92,8 +79,8 @@ function HomeComponent() {
         price: item.price,
       }));
     }
-    return generateChartData(bunPrice, 0.025, 30);
-  }, [bunHistory, bunPrice]);
+    return [];
+  }, [bunHistory]);
 
   const viteChartData = useMemo(() => {
     if (viteHistory.length >= 2) {
@@ -102,8 +89,8 @@ function HomeComponent() {
         price: item.price,
       }));
     }
-    return generateChartData(vitePrice, 0.03, 30);
-  }, [viteHistory, vitePrice]);
+    return [];
+  }, [viteHistory]);
 
   const shadChartData = useMemo(() => {
     if (shadHistory.length >= 2) {
@@ -112,8 +99,8 @@ function HomeComponent() {
         price: item.price,
       }));
     }
-    return generateChartData(shadPrice, 0.02, 30);
-  }, [shadHistory, shadPrice]);
+    return [];
+  }, [shadHistory]);
 
   const flwrChartData = useMemo(() => {
     if (flwrHistory.length >= 2) {
@@ -122,15 +109,16 @@ function HomeComponent() {
         price: item.price,
       }));
     }
-    return generateChartData(flwrPrice, 0.025, 30);
-  }, [flwrHistory, flwrPrice]);
+    return [];
+  }, [flwrHistory]);
 
   // Calculate price changes
   const getPriceChange = (
     chartData: Array<{ timestamp: number; price: number }>,
-    currentPrice: number,
+    currentPrice: number | undefined,
   ) => {
-    if (chartData.length < 2) return { change: 0, percentage: 0 };
+    if (currentPrice === undefined || chartData.length < 2)
+      return { change: 0, percentage: 0 };
     const previousPrice =
       chartData[chartData.length - 2]?.price ?? currentPrice;
     const change = currentPrice - previousPrice;
@@ -138,25 +126,40 @@ function HomeComponent() {
     return { change, percentage };
   };
 
-  const cnvxChange = getPriceChange(cnvxChartData, cnvxPrice);
-  const bunChange = getPriceChange(bunChartData, bunPrice);
-  const viteChange = getPriceChange(viteChartData, vitePrice);
-  const shadChange = getPriceChange(shadChartData, shadPrice);
-  const flwrChange = getPriceChange(flwrChartData, flwrPrice);
+  const cnvxChange = getPriceChange(cnvxChartData, cnvxPrice ?? undefined);
+  const bunChange = getPriceChange(bunChartData, bunPrice ?? undefined);
+  const viteChange = getPriceChange(viteChartData, vitePrice ?? undefined);
+  const shadChange = getPriceChange(shadChartData, shadPrice ?? undefined);
+  const flwrChange = getPriceChange(flwrChartData, flwrPrice ?? undefined);
 
   useEffect(() => {
     const id = getOrCreateDeviceId();
     setDeviceId(id);
 
     // Auto-create or get user
-    getOrCreateUser({ deviceId: id })
-      .then((user) => {
-        setUserId(user.userId);
-      })
-      .catch((error) => {
-        console.error("Failed to get or create user:", error);
-      });
-  }, [getOrCreateUser]);
+    getOrCreateUser({ deviceId: id }).catch((error) => {
+      console.error("Failed to get or create user:", error);
+    });
+
+    // Initialize price history with default prices (if not already initialized)
+    initializePriceHistory().catch((error) => {
+      console.error("Failed to initialize price history:", error);
+    });
+
+    // Start bot trading loop to generate initial trading data
+    startBotTrading().catch((error) => {
+      console.error("Failed to start bot trading:", error);
+    });
+  }, [getOrCreateUser, startBotTrading, initializePriceHistory]);
+
+  // Format balance for display
+  const balance = user?.balance ?? 0;
+  const formattedBalance = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(balance);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-8">
@@ -169,17 +172,19 @@ function HomeComponent() {
             <span className="font-medium text-muted-foreground text-sm">
               Balance
             </span>
-            <span className="font-bold text-xl tabular-nums">$1,000.00</span>
+            <span className="font-bold text-xl tabular-nums">
+              {formattedBalance}
+            </span>
           </div>
         </div>
-        <div className="mx-auto grid w-full grid-cols-3 grid-rows-3 gap-2 rounded-b-4xl border-4 border-card p-2">
+        <div className="mx-auto grid w-full grid-cols-3 grid-rows-2 gap-2 rounded-b-4xl border-4 border-card p-2">
           {/* Token Cards */}
           <TokenCard
             symbol="CNVX"
             icon={Coins}
             iconBgColor="bg-blue-900 hover:scale-100 cursor-default"
             iconColor="text-blue-400"
-            price={cnvxPrice}
+            price={cnvxPrice ?? undefined}
             changePercentage={cnvxChange.percentage}
             chartData={cnvxChartData}
           />
@@ -189,7 +194,7 @@ function HomeComponent() {
             icon={Zap}
             iconBgColor="bg-yellow-900 hover:scale-100 cursor-default"
             iconColor="text-yellow-400"
-            price={bunPrice}
+            price={bunPrice ?? undefined}
             changePercentage={bunChange.percentage}
             chartData={bunChartData}
           />
@@ -199,7 +204,7 @@ function HomeComponent() {
             icon={Sparkles}
             iconBgColor="bg-purple-900 hover:scale-100 cursor-default"
             iconColor="text-purple-400"
-            price={vitePrice}
+            price={vitePrice ?? undefined}
             changePercentage={viteChange.percentage}
             chartData={viteChartData}
           />
@@ -209,18 +214,57 @@ function HomeComponent() {
             icon={Gem}
             iconBgColor="bg-indigo-900 hover:scale-100 cursor-default"
             iconColor="text-indigo-400"
-            price={shadPrice}
+            price={shadPrice ?? undefined}
             changePercentage={shadChange.percentage}
             chartData={shadChartData}
           />
 
-          <Card className="col-span-2 row-span-2" />
+          <Card className="col-span-2 row-span-2 flex flex-col">
+            <CardContent className="flex flex-1 flex-col gap-4">
+              <div>
+                <h2 className="mb-2 font-semibold text-lg">
+                  About ConvexTrade
+                </h2>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  A real-time trading terminal powered by Convex's real-time
+                  sync.
+                </p>
+              </div>
+
+              <div className="mt-auto pt-2">
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  <span>
+                    built by{" "}
+                    <a
+                      href="https://x.com/hiwinit"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      winit.
+                    </a>{" "}
+                  </span>
+                  <span>
+                    source @{" "}
+                    <a
+                      href="https://github.com/winit-io/convextrade"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      github
+                    </a>
+                  </span>
+                </p>
+              </div>
+            </CardContent>
+          </Card>
           <TokenCard
             symbol="FLWR"
             icon={Flower2}
             iconBgColor="bg-pink-900 hover:scale-100 cursor-default"
             iconColor="text-pink-400"
-            price={flwrPrice}
+            price={flwrPrice ?? undefined}
             changePercentage={flwrChange.percentage}
             chartData={flwrChartData}
           />

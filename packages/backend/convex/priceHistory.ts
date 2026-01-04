@@ -1,5 +1,5 @@
-import { query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import { internalMutation, mutation, query } from "./_generated/server";
 
 // Get price history for chart - optimized
 export const getPriceHistory = query({
@@ -16,22 +16,47 @@ export const getPriceHistory = query({
       .order("desc")
       .take(limit);
 
-    // If no history exists, return a default entry
-    if (history.length === 0) {
-      return [
-        {
-          _id: "default" as any,
-          _creationTime: Date.now(),
-          token,
-          price: 10.0,
-          timestamp: Date.now(),
-          volume: 0,
-        },
-      ];
-    }
-
     // Reverse to get chronological order (oldest to newest)
     return history.reverse();
+  },
+});
+
+// Initialize price history with default prices for all tokens
+// This ensures prices are available immediately without waiting for trades
+export const initializePriceHistory = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const tokens = [
+      { symbol: "CNVX", price: 10.0 },
+      { symbol: "BUN", price: 5.0 },
+      { symbol: "VITE", price: 15.0 },
+      { symbol: "SHAD", price: 8.0 },
+      { symbol: "FLWR", price: 12.0 },
+    ];
+
+    const now = Date.now();
+    let initialized = 0;
+
+    for (const token of tokens) {
+      // Check if price history already exists for this token
+      const existing = await ctx.db
+        .query("priceHistory")
+        .withIndex("by_token_timestamp", (q) => q.eq("token", token.symbol))
+        .first();
+
+      // Only initialize if no history exists
+      if (!existing) {
+        await ctx.db.insert("priceHistory", {
+          token: token.symbol,
+          price: token.price,
+          timestamp: now,
+          volume: 0,
+        });
+        initialized++;
+      }
+    }
+
+    return { initialized, total: tokens.length };
   },
 });
 
@@ -42,7 +67,7 @@ export const backfillPriceHistoryTokens = internalMutation({
   handler: async (ctx) => {
     const allHistory = await ctx.db.query("priceHistory").collect();
     let updated = 0;
-    
+
     for (const record of allHistory) {
       // Check if token field is missing (undefined or null)
       if (!record.token) {
@@ -52,8 +77,7 @@ export const backfillPriceHistoryTokens = internalMutation({
         updated++;
       }
     }
-    
+
     return { updated, total: allHistory.length };
   },
 });
-

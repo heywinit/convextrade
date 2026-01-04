@@ -63,7 +63,7 @@ export const getOrderbook = query({
   },
 });
 
-// Get current market price (last trade price or default)
+// Get current market price (last trade price or last price history entry)
 export const getCurrentPrice = query({
   args: {
     token: v.optional(v.string()), // Token symbol, defaults to "CNVX" for backward compatibility
@@ -76,7 +76,18 @@ export const getCurrentPrice = query({
       .order("desc")
       .first();
 
-    return lastTrade?.price ?? 10.0; // Default price of $10
+    if (lastTrade) {
+      return lastTrade.price;
+    }
+
+    // If no trades exist, try to get from price history
+    const lastPriceHistory = await ctx.db
+      .query("priceHistory")
+      .withIndex("by_token_timestamp", (q) => q.eq("token", token))
+      .order("desc")
+      .first();
+
+    return lastPriceHistory?.price; // Return undefined if no price history exists
   },
 });
 
