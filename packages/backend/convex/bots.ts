@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction, internalMutation, mutation, query } from "./_generated/server";
+import {
+  internalAction,
+  internalMutation,
+  mutation,
+  query,
+} from "./_generated/server";
 
 // Initialize bot users (5 bots)
 export const initializeBots = internalMutation({
@@ -65,12 +70,33 @@ export const botTrade = internalMutation({
     }
 
     // Get current market price for the token
+    // First try to get from last trade
     const lastTrade = await ctx.db
       .query("trades")
       .withIndex("by_token_timestamp", (q: any) => q.eq("token", token))
       .order("desc")
       .first();
-    const currentPrice = lastTrade?.price ?? 10.0;
+
+    // If no trade exists, try to get from price history
+    let currentPrice = lastTrade?.price;
+    if (!currentPrice) {
+      const lastPriceHistory = await ctx.db
+        .query("priceHistory")
+        .withIndex("by_token_timestamp", (q: any) => q.eq("token", token))
+        .order("desc")
+        .first();
+      currentPrice = lastPriceHistory?.price;
+    }
+
+    // Fallback to token-specific default prices if nothing exists
+    const defaultPrices: Record<string, number> = {
+      CNVX: 10.0,
+      BUN: 5.0,
+      VITE: 15.0,
+      SHAD: 8.0,
+      FLWR: 12.0,
+    };
+    currentPrice = currentPrice ?? defaultPrices[token] ?? 10.0;
 
     // Get orderbook to understand market depth for the token
     const buyOrders = await ctx.db
@@ -298,7 +324,10 @@ export const botTrade = internalMutation({
         }
       }
 
-      return { success: false, reason: "Insufficient balance or CNVX" };
+      return {
+        success: false,
+        reason: `Insufficient balance or ${token} tokens`,
+      };
     } catch (error) {
       return {
         success: false,
@@ -358,16 +387,20 @@ export const runBotTradingForAllTokens = internalAction({
   args: {},
   handler: async (ctx) => {
     const tokens = ["CNVX", "BUN", "VITE", "SHAD", "FLWR"];
-    
+
     // Initialize bots if they don't exist
     await ctx.runMutation(internal.bots.initializeBots, {});
-    
+
     // Run bot trading for all tokens
     for (const token of tokens) {
       await ctx.runMutation(internal.bots.runBotTrading, { token });
     }
-    
-    await ctx.scheduler.runAfter(500, internal.bots.runBotTradingForAllTokens, {});
+
+    await ctx.scheduler.runAfter(
+      500,
+      internal.bots.runBotTradingForAllTokens,
+      {},
+    );
   },
 });
 
@@ -379,7 +412,11 @@ export const startBotTradingLoop = mutation({
     // Initialize bots if they don't exist
     await ctx.runMutation(internal.bots.initializeBots, {});
     // Start the self-scheduling loop
-    await ctx.scheduler.runAfter(0, internal.bots.runBotTradingForAllTokens, {});
+    await ctx.scheduler.runAfter(
+      0,
+      internal.bots.runBotTradingForAllTokens,
+      {},
+    );
     return { success: true, message: "Bot trading loop started" };
   },
 });
